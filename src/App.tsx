@@ -175,7 +175,7 @@ function FaceEditorPanel({ face, surface, onError }: { face: BoxFace; surface: A
   }
   const removeBackground = async () => {
     if (!current.url || processing) return; setProcessing(true)
-    try { const result = await removeSolidImageBackground(current.url, true); if (!result.removed) onError(result.reason); else { updateFace({ url: result.url, fit: 'contain' }); setBackgroundNote(result.reason) } }
+    try { const result = await removeSolidImageBackground(current.url, true); if (!result.removed) { setBackgroundNote(''); onError(result.reason) } else { updateFace({ url: result.url, fit: 'contain' }); setBackgroundNote(result.reason) } }
     catch (reason) { onError(reason instanceof Error ? reason.message : '智能去底失败') }
     finally { setProcessing(false) }
   }

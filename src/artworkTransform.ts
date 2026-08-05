@@ -83,13 +83,16 @@ export async function removeSolidImageBackground(source: string, force = false) 
   for (let y = 0; y < canvas.height; y += sampleStep) { add(0, y); add(canvas.width - 1, y) }
   const background = border.reduce((sum, color) => [sum[0] + color[0], sum[1] + color[1], sum[2] + color[2]] as [number, number, number], [0, 0, 0] as [number, number, number]).map(value => value / Math.max(1, border.length)) as [number, number, number]
   const distance = (r: number, g: number, b: number) => Math.hypot(r - background[0], g - background[1], b - background[2])
-  const uniformRatio = border.filter(color => distance(...color) < 24).length / Math.max(1, border.length)
+  const backgroundLuma = background[0] * .2126 + background[1] * .7152 + background[2] * .0722
+  const neutral = Math.max(...background) - Math.min(...background) < 28; const darkBackground = neutral && backgroundLuma < 82; const lightBackground = neutral && backgroundLuma > 188
+  const uniformTolerance = darkBackground || lightBackground ? 62 : 28
+  const uniformRatio = border.filter(color => distance(...color) < uniformTolerance).length / Math.max(1, border.length)
   let transparentPixels = 0; for (let index = 3; index < data.length; index += 4) if (data[index] < 250) transparentPixels += 1
   if (transparentPixels > data.length / 4000) return { url: source, removed: false, reason: '图片已包含透明通道' }
-  const neutral = Math.max(...background) - Math.min(...background) < 22
-  if (uniformRatio < .9 || (!force && !neutral)) return { url: source, removed: false, reason: '没有检测到可安全移除的纯色背景' }
+  if (uniformRatio < (force ? .68 : .8) || (!force && !neutral)) return { url: source, removed: false, reason: '没有检测到可安全移除的纯色背景' }
   for (let index = 0; index < data.length; index += 4) {
-    const alpha = smoothstep(7, 58, distance(data[index], data[index + 1], data[index + 2]))
+    const separation = darkBackground ? Math.max(data[index], data[index + 1], data[index + 2]) : lightBackground ? 255 - Math.min(data[index], data[index + 1], data[index + 2]) : distance(data[index], data[index + 1], data[index + 2])
+    const alpha = darkBackground ? smoothstep(54, 128, separation) : lightBackground ? smoothstep(34, 112, separation) : smoothstep(7, 58, separation)
     if (alpha < .995) {
       if (alpha > .025) for (let channel = 0; channel < 3; channel += 1) data[index + channel] = Math.max(0, Math.min(255, (data[index + channel] - background[channel] * (1 - alpha)) / alpha))
       data[index + 3] = Math.round(alpha * 255)
