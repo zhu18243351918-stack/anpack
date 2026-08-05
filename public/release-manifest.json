@@ -1,5 +1,9 @@
 {
   "version": "0.1.0",
-  "publishedAt": "",
-  "installer": { "url": "https://github.com/your-account/anpack/releases", "size": "尚未发布", "sha256": "pending" }
+  "installer": {
+    "size": "306.2 MB",
+    "url": "https://github.com/zhu18243351918-stack/anpack/releases/download/v0.1.0/Anpack_0.1.0_x64-setup.exe",
+    "sha256": "4d224d26bca3ad5b16ace1d537e6c0159c091771cb40ee32b5378287787d8021"
+  },
+  "publishedAt": "2026-08-05T04:50:16.1821670Z"
 }
