@@ -1,0 +1,5 @@
+﻿Studio Small 09 HDRI
+Source: https://polyhaven.com/a/studio_small_09
+Creator: Sergej Majboroda / Poly Haven
+License: CC0 1.0 Universal
+Bundled locally for offline environment lighting.

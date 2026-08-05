@@ -1,0 +1,5 @@
+Copyright (c) 2026 Anpack. All rights reserved.
+
+The source code in this repository is made publicly viewable for transparency and audit purposes only. No permission is granted to copy, modify, distribute, sublicense, sell, host, or create derivative works from the Anpack source code without prior written authorization from the copyright holder.
+
+Third-party components remain governed by their respective licenses. The bundled Blender runtime is a separate, unmodified program distributed under the GNU General Public License and communicates with Anpack only through command-line execution and GLB/JSON files.

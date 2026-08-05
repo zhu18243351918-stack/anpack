@@ -1,0 +1,9 @@
+project_id = "anpack"
+
+[auth]
+site_url = "http://localhost:5173/#/app"
+additional_redirect_urls = ["http://localhost:5173/**", "anpack://auth/callback", "https://*.github.io/**"]
+enable_signup = true
+
+[functions.issue-offline-receipt]
+verify_jwt = true

@@ -1,0 +1,29 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Anpack",
+  "version": "0.1.0",
+  "identifier": "com.anpack.studio",
+  "build": {
+    "beforeDevCommand": "pnpm dev:desktop",
+    "devUrl": "http://localhost:5173",
+    "beforeBuildCommand": "pnpm build:desktop",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [{ "title": "Anpack", "width": 1600, "height": 980, "minWidth": 1180, "minHeight": 760, "center": true, "decorations": true }],
+    "security": { "csp": "default-src 'self'; connect-src 'self' https://*.supabase.co wss://*.supabase.co; img-src 'self' data: blob: asset:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:" }
+  },
+  "bundle": {
+    "active": true,
+    "createUpdaterArtifacts": true,
+    "targets": ["nsis"],
+    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.ico"],
+    "resources": { "resources/blender/**/*": "resources/blender/", "resources/blender_render.py": "resources/blender_render.py", "resources/THIRD_PARTY_LICENSES.md": "resources/THIRD_PARTY_LICENSES.md" },
+    "windows": { "nsis": { "displayLanguageSelector": true, "installerIcon": "icons/icon.ico", "installMode": "perMachine" } },
+    "licenseFile": "../LICENSE"
+  },
+  "plugins": {
+    "deep-link": { "desktop": { "schemes": ["anpack"] } },
+    "updater": { "endpoints": ["https://github.com/your-account/anpack/releases/latest/download/latest.json"], "pubkey": "REPLACE_WITH_TAURI_UPDATER_PUBLIC_KEY", "windows": { "installMode": "passive" } }
+  }
+}

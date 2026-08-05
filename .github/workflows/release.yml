@@ -1,0 +1,95 @@
+name: Release Windows Desktop
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  BLENDER_VERSION: 4.5.12
+  BLENDER_SHA256: 317ef64e7a2c3cc79ec810c766ae9828aff865bea78039dc695b3f1118c34b4f
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 11 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - uses: dtolnay/rust-toolchain@stable
+        with: { targets: x86_64-pc-windows-msvc }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint && pnpm test
+      - name: Apply release version and updater endpoint
+        shell: pwsh
+        env:
+          TAURI_UPDATER_PUBLIC_KEY: ${{ secrets.TAURI_UPDATER_PUBLIC_KEY }}
+        run: |
+          $version = '${{ github.ref_name }}'.TrimStart('v')
+          $config = Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json
+          $config.version = $version
+          $config.plugins.updater.endpoints[0] = "https://github.com/${{ github.repository }}/releases/latest/download/latest.json"
+          $config.plugins.updater.pubkey = $env:TAURI_UPDATER_PUBLIC_KEY
+          $config | ConvertTo-Json -Depth 20 | Set-Content src-tauri/tauri.conf.json
+      - name: Download verified Blender LTS runtime
+        shell: pwsh
+        run: |
+          $url = "https://download.blender.org/release/Blender4.5/blender-$env:BLENDER_VERSION-windows-x64.zip"
+          Invoke-WebRequest $url -OutFile blender.zip
+          if ((Get-FileHash blender.zip -Algorithm SHA256).Hash.ToLower() -ne $env:BLENDER_SHA256) { throw 'Blender SHA-256 mismatch' }
+          Expand-Archive blender.zip blender-unpacked
+          Remove-Item src-tauri/resources/blender/README.txt -ErrorAction SilentlyContinue
+          Copy-Item "blender-unpacked/blender-$env:BLENDER_VERSION-windows-x64/*" src-tauri/resources/blender -Recurse -Force
+      - name: Build Tauri NSIS and updater artifacts
+        run: pnpm tauri:build -- --target x86_64-pc-windows-msvc
+        env:
+          VITE_TARGET: desktop
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_OFFLINE_RECEIPT_PUBLIC_KEY: ${{ secrets.VITE_OFFLINE_RECEIPT_PUBLIC_KEY }}
+          VITE_REPOSITORY_URL: https://github.com/${{ github.repository }}
+          VITE_APP_VERSION: ${{ github.ref_name }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+      - name: Package portable edition and checksums
+        shell: pwsh
+        run: |
+          New-Item release/Anpack-portable/resources -ItemType Directory -Force | Out-Null
+          Copy-Item src-tauri/target/x86_64-pc-windows-msvc/release/anpack.exe release/Anpack-portable/Anpack.exe
+          Copy-Item src-tauri/resources/blender release/Anpack-portable/resources/blender -Recurse
+          Copy-Item src-tauri/resources/blender_render.py release/Anpack-portable/resources/
+          Copy-Item src-tauri/resources/THIRD_PARTY_LICENSES.md release/Anpack-portable/resources/
+          Compress-Archive release/Anpack-portable release/Anpack_${{ github.ref_name }}_windows_x64_portable.zip
+          Get-ChildItem src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe | Copy-Item -Destination release
+          $updater = Get-ChildItem src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.nsis.zip | Select-Object -First 1
+          if ($updater) {
+            Copy-Item $updater.FullName release
+            Copy-Item "$($updater.FullName).sig" release
+            $signature = Get-Content "$($updater.FullName).sig" -Raw
+            $latest = @{ version='${{ github.ref_name }}'.TrimStart('v'); notes='Anpack desktop update'; pub_date=(Get-Date).ToUniversalTime().ToString('o'); platforms=@{ 'windows-x86_64'=@{ signature=$signature.Trim(); url="https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/$($updater.Name)" } } } | ConvertTo-Json -Depth 6
+            Set-Content release/latest.json $latest
+          }
+          Get-ChildItem release -File | ForEach-Object { "$(Get-FileHash $_.FullName -Algorithm SHA256 | Select-Object -ExpandProperty Hash)  $($_.Name)" } | Set-Content release/SHA256SUMS.txt
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            release/*
+      - name: Update website release manifest
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem release/*.exe | Select-Object -First 1
+          $hash = (Get-FileHash $installer.FullName -Algorithm SHA256).Hash.ToLower()
+          $manifest = @{ version='${{ github.ref_name }}'.TrimStart('v'); publishedAt=(Get-Date).ToUniversalTime().ToString('o'); installer=@{ url="https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/$($installer.Name)"; size="{0:N1} MB" -f ($installer.Length/1MB); sha256=$hash } } | ConvertTo-Json -Depth 4
+          Set-Content public/release-manifest.json $manifest
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add public/release-manifest.json
+          git commit -m "chore: update desktop release manifest for ${{ github.ref_name }}" || exit 0
+          git push origin HEAD:main
