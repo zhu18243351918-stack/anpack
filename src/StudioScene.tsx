@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Canvas, useThree } from '@react-three/fiber'
 import { ContactShadows, OrbitControls, OrthographicCamera, PerspectiveCamera, RoundedBox } from '@react-three/drei'
 import * as THREE from 'three'
@@ -7,6 +7,7 @@ import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import { useStudio } from './store'
 import { renderArtworkCanvas } from './artworkTransform'
 import { getSceneTemplate } from './presets'
+import { DEFAULT_SCENE_OBJECT_TRANSFORM } from './sceneObjects'
 import { cloneModelObject, loadModelAssetObject, serializeModel } from './modelAssets'
 import type { BoxFace, CameraConfig, FaceArtwork, MaterialConfig, PackagingModelConfig, PackshotExportRequest, PackshotExportResult } from './types'
 
@@ -262,12 +263,34 @@ function ProductModel({ config }: { config: PackagingModelConfig }) {
   return config.type === 'box' ? <BoxModel config={config} /> : config.type === 'bottle' ? <BottleModel config={config} /> : config.type === 'can' ? <CanModel config={config} /> : config.type === 'pouch' ? <PouchModel config={config} /> : <CustomModel config={config} />
 }
 
+function EditableSceneObject({ id, position = [0, 0, 0], rotation = [0, 0, 0], scale = 1, children }: { id: string; position?: [number, number, number]; rotation?: [number, number, number]; scale?: number; children: ReactNode }) {
+  const override = useStudio(s => s.snapshot.scene.objectOverrides[id] ?? DEFAULT_SCENE_OBJECT_TRANSFORM)
+  const selected = useStudio(s => s.selectedSceneObjectId === id)
+  const select = useStudio(s => s.selectSceneObject)
+  if (!override.visible) return null
+  const finalPosition: [number, number, number] = [position[0] + override.position[0], position[1] + override.position[1], position[2] + override.position[2]]
+  const finalRotation: [number, number, number] = [rotation[0] + override.rotation[0], rotation[1] + override.rotation[1], rotation[2] + override.rotation[2]]
+  return <group
+    name={`scene-object:${id}`}
+    position={finalPosition}
+    rotation={finalRotation}
+    scale={scale * override.scale}
+    userData={{ sceneObjectId: id }}
+    onClick={event => { event.stopPropagation(); select(id) }}
+    onPointerOver={event => { event.stopPropagation(); document.body.style.cursor = 'pointer' }}
+    onPointerOut={() => { document.body.style.cursor = '' }}
+  >
+    {children}
+    {selected && <pointLight name="preview-only" color="#ff7a22" intensity={.22} distance={2.6} decay={2} />}
+  </group>
+}
+
 function Product() {
   const model = useStudio(s => s.snapshot.model); const packagingTemplate = useStudio(s => s.snapshot.template); const scene = useStudio(s => s.snapshot.scene)
   const template = getSceneTemplate(scene.templateId || scene.preset)
   const config = model.type === 'box' && packagingTemplate === 'mailer' ? { ...model, height: model.depth, depth: model.height } : model
   return <group name="product-root" position={scene.productPosition} rotation={scene.productRotation} scale={scene.productScale}>
-    {template.products.map((instance, index) => <group key={`${template.id}-${index}`} position={instance.position} rotation={instance.rotation} scale={instance.scale}><ProductModel config={config} /></group>)}
+    {template.products.map((instance, index) => <EditableSceneObject key={`${template.id}-${index}`} id={`product-${index}`} position={instance.position} rotation={instance.rotation} scale={instance.scale}><ProductModel config={config} /></EditableSceneObject>)}
   </group>
 }
 
@@ -276,39 +299,47 @@ function SceneDecor() {
   if (!scene.decor && !scene.pedestal) return null
   const matte = (color: string, roughness = .65) => <meshPhysicalMaterial color={color} roughness={roughness} clearcoat={.08} />
   if (template.id === 'soft-gradient') return <group name="scene-decor">
-    {scene.decor && <><mesh position={[-2.25, 1.15, -1.35]} rotation={[Math.PI / 2, 0, 0]} castShadow><torusGeometry args={[.8, .18, 32, 96]} />{matte('#ded8cc', .72)}</mesh><mesh position={[2.15, .36, -.75]} castShadow><sphereGeometry args={[.34, 48, 48]} />{matte('#9d988f', .48)}</mesh></>}
+    {scene.decor && <><EditableSceneObject id="decor-ring" position={[-2.25, 1.15, -1.35]} rotation={[Math.PI / 2, 0, 0]}><mesh castShadow><torusGeometry args={[.8, .18, 32, 96]} />{matte('#ded8cc', .72)}</mesh></EditableSceneObject><EditableSceneObject id="decor-sphere" position={[2.15, .36, -.75]}><mesh castShadow><sphereGeometry args={[.34, 48, 48]} />{matte('#9d988f', .48)}</mesh></EditableSceneObject></>}
   </group>
   if (template.id === 'warm-beauty') return <group name="scene-decor">
-    {scene.pedestal && <mesh position={[0, .22, 0]} receiveShadow castShadow><cylinderGeometry args={[1.45, 1.55, .44, 96]} />{matte('#d8a083', .58)}</mesh>}
-    {scene.decor && <><RoundedBox args={[3.15, 3.3, .34]} radius={1.35} smoothness={8} position={[-1.65, 1.65, -2.25]} castShadow>{matte('#b96855', .78)}</RoundedBox><mesh position={[2.05, .4, -.65]} castShadow><sphereGeometry args={[.36, 48, 48]} />{matte('#f1c4a7', .36)}</mesh></>}
+    {scene.pedestal && <EditableSceneObject id="pedestal" position={[0, .22, 0]}><mesh receiveShadow castShadow><cylinderGeometry args={[1.45, 1.55, .44, 96]} />{matte('#d8a083', .58)}</mesh></EditableSceneObject>}
+    {scene.decor && <><EditableSceneObject id="decor-arch" position={[-1.65, 1.65, -2.25]}><RoundedBox args={[3.15, 3.3, .34]} radius={1.35} smoothness={8} castShadow>{matte('#b96855', .78)}</RoundedBox></EditableSceneObject><EditableSceneObject id="decor-sphere" position={[2.05, .4, -.65]}><mesh castShadow><sphereGeometry args={[.36, 48, 48]} />{matte('#f1c4a7', .36)}</mesh></EditableSceneObject></>}
   </group>
-  if (template.id === 'blue-geometric') return <group name="scene-decor">
-    {scene.decor && <>
-      <RoundedBox args={[5.4, .28, 2.05]} radius={.08} smoothness={5} position={[-1.45, .24, -1.15]} rotation={[0, -.32, -.05]} castShadow receiveShadow>{matte('#0b5ea7', .42)}</RoundedBox>
-      <RoundedBox args={[4.4, .18, 1.15]} radius={.06} smoothness={4} position={[1.45, .58, -1.85]} rotation={[0, .22, .12]} castShadow>{matte('#113e70', .38)}</RoundedBox>
-      <RoundedBox args={[3.6, .08, .12]} radius={.03} smoothness={3} position={[.1, 1.02, -.45]} rotation={[0, -.25, -.18]} castShadow>{matte('#ff7a22', .3)}</RoundedBox>
-      {[[-2.35, .48, .2, .29], [2.25, .52, -.25, .36], [.2, 2.65, -1.25, .3], [1.75, 1.45, -1.2, .2]].map(([x, y, z, r], index) => <mesh key={index} position={[x, y, z]} castShadow><sphereGeometry args={[r, 48, 48]} /><meshPhysicalMaterial color="#9cd5ee" metalness={.55} roughness={.14} clearcoat={1} /></mesh>)}
-    </>}
-  </group>
+  if (template.id === 'blue-geometric') {
+    const spheres = [[-2.35, .48, .2, .29], [2.25, .52, -.25, .36], [.2, 2.65, -1.25, .3], [1.75, 1.45, -1.2, .2]] as const
+    return <group name="scene-decor">{scene.decor && <>
+      <EditableSceneObject id="decor-platform-main" position={[-1.45, .24, -1.15]} rotation={[0, -.32, -.05]}><RoundedBox args={[5.4, .28, 2.05]} radius={.08} smoothness={5} castShadow receiveShadow>{matte('#0b5ea7', .42)}</RoundedBox></EditableSceneObject>
+      <EditableSceneObject id="decor-platform-back" position={[1.45, .58, -1.85]} rotation={[0, .22, .12]}><RoundedBox args={[4.4, .18, 1.15]} radius={.06} smoothness={4} castShadow>{matte('#113e70', .38)}</RoundedBox></EditableSceneObject>
+      <EditableSceneObject id="decor-accent" position={[.1, 1.02, -.45]} rotation={[0, -.25, -.18]}><RoundedBox args={[3.6, .08, .12]} radius={.03} smoothness={3} castShadow>{matte('#ff7a22', .3)}</RoundedBox></EditableSceneObject>
+      {spheres.map(([x, y, z, r], index) => <EditableSceneObject key={index} id={`decor-sphere-${index + 1}`} position={[x, y, z]}><mesh castShadow><sphereGeometry args={[r, 48, 48]} /><meshPhysicalMaterial color="#9cd5ee" metalness={.55} roughness={.14} clearcoat={1} /></mesh></EditableSceneObject>)}
+    </>}</group>
+  }
   if (template.id === 'dark-luxury') return <group name="scene-decor">
-    {scene.pedestal && <RoundedBox args={[2.75, .6, 2.35]} radius={.1} smoothness={5} position={[0, .3, 0]} castShadow receiveShadow>{matte('#17191d', .28)}</RoundedBox>}
-    {scene.decor && <><RoundedBox args={[1.35, 1.7, 1.2]} radius={.08} smoothness={5} position={[-2.05, .85, -.8]} rotation={[0, .28, 0]} castShadow>{matte('#272329', .38)}</RoundedBox><mesh position={[1.95, 1.5, -1.55]} rotation={[Math.PI / 2, 0, 0]} castShadow><torusGeometry args={[.68, .045, 24, 96]} /><meshPhysicalMaterial color="#c89545" metalness={.88} roughness={.2} /></mesh></>}
+    {scene.pedestal && <EditableSceneObject id="pedestal" position={[0, .3, 0]}><RoundedBox args={[2.75, .6, 2.35]} radius={.1} smoothness={5} castShadow receiveShadow>{matte('#17191d', .28)}</RoundedBox></EditableSceneObject>}
+    {scene.decor && <><EditableSceneObject id="decor-block" position={[-2.05, .85, -.8]} rotation={[0, .28, 0]}><RoundedBox args={[1.35, 1.7, 1.2]} radius={.08} smoothness={5} castShadow>{matte('#272329', .38)}</RoundedBox></EditableSceneObject><EditableSceneObject id="decor-ring" position={[1.95, 1.5, -1.55]} rotation={[Math.PI / 2, 0, 0]}><mesh castShadow><torusGeometry args={[.68, .045, 24, 96]} /><meshPhysicalMaterial color="#c89545" metalness={.88} roughness={.2} /></mesh></EditableSceneObject></>}
   </group>
   if (template.id === 'cool-warm') return <group name="scene-decor">
-    {scene.pedestal && <mesh position={[.3, .22, 0]} receiveShadow castShadow><cylinderGeometry args={[1.38, 1.48, .44, 80]} />{matte('#d57c62', .52)}</mesh>}
-    {scene.decor && <><RoundedBox args={[3.4, .22, 1.4]} radius={.07} smoothness={4} position={[-1.65, .28, -1.35]} rotation={[0, -.3, .08]} castShadow>{matte('#2a8291', .48)}</RoundedBox><RoundedBox args={[2.2, 2.8, .26]} radius={.2} smoothness={5} position={[2.15, 1.4, -2.1]} rotation={[0, -.2, 0]} castShadow>{matte('#c8614e', .62)}</RoundedBox></>}
+    {scene.pedestal && <EditableSceneObject id="pedestal" position={[.3, .22, 0]}><mesh receiveShadow castShadow><cylinderGeometry args={[1.38, 1.48, .44, 80]} />{matte('#d57c62', .52)}</mesh></EditableSceneObject>}
+    {scene.decor && <><EditableSceneObject id="decor-platform" position={[-1.65, .28, -1.35]} rotation={[0, -.3, .08]}><RoundedBox args={[3.4, .22, 1.4]} radius={.07} smoothness={4} castShadow>{matte('#2a8291', .48)}</RoundedBox></EditableSceneObject><EditableSceneObject id="decor-panel" position={[2.15, 1.4, -2.1]} rotation={[0, -.2, 0]}><RoundedBox args={[2.2, 2.8, .26]} radius={.2} smoothness={5} castShadow>{matte('#c8614e', .62)}</RoundedBox></EditableSceneObject></>}
   </group>
-  if (template.id === 'floating-launch') return <group name="scene-decor">
-    {scene.decor && <><mesh position={[0, 1.35, -1.5]} rotation={[Math.PI / 2, 0, .2]} castShadow><torusGeometry args={[1.4, .1, 32, 120]} /><meshPhysicalMaterial color="#f0d955" metalness={.15} roughness={.3} /></mesh>{[[-2.15, 2.35, -.8, .3], [2.15, .48, -.2, .24], [1.9, 2.7, -1.2, .18]].map(([x, y, z, r], index) => <mesh key={index} position={[x, y, z]} castShadow><sphereGeometry args={[r, 40, 40]} />{matte(index === 1 ? '#ff936d' : '#b7f1d2', .28)}</mesh>)}</>}
-  </group>
-  if (template.id === 'water-clear') return <group name="scene-decor">
-    {scene.pedestal && <mesh position={[0, .18, 0]} receiveShadow castShadow><cylinderGeometry args={[1.35, 1.5, .36, 96]} /><meshPhysicalMaterial color="#bfeaf0" roughness={.08} transmission={.35} thickness={.4} clearcoat={1} /></mesh>}
-    {scene.decor && <>{[[-1.65, .45, -.4, .28], [1.45, .75, -.7, .22], [1.95, 1.75, -1.5, .16], [-1.3, 2.25, -1.7, .14]].map(([x, y, z, r], index) => <mesh key={index} position={[x, y, z]} castShadow><sphereGeometry args={[r, 48, 48]} /><meshPhysicalMaterial color="#d8f8fb" roughness={.04} transmission={.72} thickness={.32} clearcoat={1} /></mesh>)}</>}
-  </group>
-  if (template.id === 'botanical-natural') return <group name="scene-decor">
-    {scene.pedestal && <mesh position={[0, .12, 0]} receiveShadow castShadow><cylinderGeometry args={[1.5, 1.65, .24, 72]} />{matte('#b9b3a4', .9)}</mesh>}
-    {scene.decor && <><mesh position={[-1.8, .28, -.4]} scale={[1.5, .42, .95]} castShadow><sphereGeometry args={[.55, 48, 48]} />{matte('#827f72', .94)}</mesh>{[[-1.7, 1.45, -1.35, -.65], [1.75, 1.2, -1.45, .55], [2.05, .65, -.55, .95]].map(([x, y, z, rz], index) => <mesh key={index} position={[x, y, z]} rotation={[0, 0, rz]} scale={[.28, .78, .08]} castShadow><sphereGeometry args={[.55, 36, 36]} />{matte(index === 1 ? '#667b56' : '#526a47', .8)}</mesh>)}</>}
-  </group>
+  if (template.id === 'floating-launch') {
+    const spheres = [[-2.15, 2.35, -.8, .3], [2.15, .48, -.2, .24], [1.9, 2.7, -1.2, .18]] as const
+    return <group name="scene-decor">{scene.decor && <><EditableSceneObject id="decor-ring" position={[0, 1.35, -1.5]} rotation={[Math.PI / 2, 0, .2]}><mesh castShadow><torusGeometry args={[1.4, .1, 32, 120]} /><meshPhysicalMaterial color="#f0d955" metalness={.15} roughness={.3} /></mesh></EditableSceneObject>{spheres.map(([x, y, z, r], index) => <EditableSceneObject key={index} id={`decor-sphere-${index + 1}`} position={[x, y, z]}><mesh castShadow><sphereGeometry args={[r, 40, 40]} />{matte(index === 1 ? '#ff936d' : '#b7f1d2', .28)}</mesh></EditableSceneObject>)}</>}</group>
+  }
+  if (template.id === 'water-clear') {
+    const bubbles = [[-1.65, .45, -.4, .28], [1.45, .75, -.7, .22], [1.95, 1.75, -1.5, .16], [-1.3, 2.25, -1.7, .14]] as const
+    return <group name="scene-decor">
+      {scene.pedestal && <EditableSceneObject id="pedestal" position={[0, .18, 0]}><mesh receiveShadow castShadow><cylinderGeometry args={[1.35, 1.5, .36, 96]} /><meshPhysicalMaterial color="#bfeaf0" roughness={.08} transmission={.35} thickness={.4} clearcoat={1} /></mesh></EditableSceneObject>}
+      {scene.decor && <>{bubbles.map(([x, y, z, r], index) => <EditableSceneObject key={index} id={`decor-bubble-${index + 1}`} position={[x, y, z]}><mesh castShadow><sphereGeometry args={[r, 48, 48]} /><meshPhysicalMaterial color="#d8f8fb" roughness={.04} transmission={.72} thickness={.32} clearcoat={1} /></mesh></EditableSceneObject>)}</>}
+    </group>
+  }
+  if (template.id === 'botanical-natural') {
+    const leaves = [[-1.7, 1.45, -1.35, -.65], [1.75, 1.2, -1.45, .55], [2.05, .65, -.55, .95]] as const
+    return <group name="scene-decor">
+      {scene.pedestal && <EditableSceneObject id="pedestal" position={[0, .12, 0]}><mesh receiveShadow castShadow><cylinderGeometry args={[1.5, 1.65, .24, 72]} />{matte('#b9b3a4', .9)}</mesh></EditableSceneObject>}
+      {scene.decor && <><EditableSceneObject id="decor-rock" position={[-1.8, .28, -.4]}><mesh scale={[1.5, .42, .95]} castShadow><sphereGeometry args={[.55, 48, 48]} />{matte('#827f72', .94)}</mesh></EditableSceneObject>{leaves.map(([x, y, z, rz], index) => <EditableSceneObject key={index} id={`decor-leaf-${index + 1}`} position={[x, y, z]} rotation={[0, 0, rz]}><mesh scale={[.28, .78, .08]} castShadow><sphereGeometry args={[.55, 36, 36]} />{matte(index === 1 ? '#667b56' : '#526a47', .8)}</mesh></EditableSceneObject>)}</>}
+    </group>
+  }
   return null
 }
 

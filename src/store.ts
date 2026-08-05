@@ -24,7 +24,7 @@ export const initialSnapshot: ProjectSnapshot = {
     shadowSoftness: 5, exposure: .88, environment: 'studio-small-09', environmentIntensity: .9,
     environmentRotation: -18, keySize: 4.5, fillSize: 5.5,
   },
-  scene: { preset: '电商白底', templateId: 'commerce-white', background: '#e9e9e7', floor: true, pedestal: false, decor: false, transparent: false, productPosition: [0, 0, 0], productRotation: [0, 0, 0], productScale: 1, cyclorama: true, floorRoughness: .76 },
+  scene: { preset: '电商白底', templateId: 'commerce-white', background: '#e9e9e7', floor: true, pedestal: false, decor: false, transparent: false, productPosition: [0, 0, 0], productRotation: [0, 0, 0], productScale: 1, cyclorama: true, floorRoughness: .76, objectOverrides: {} },
   export: { format: 'png', size: 2048, ratio: '1:1', transparent: false, quality: .92, renderer: 'pathtraced', renderQuality: 'studio', samples: 128, bounces: 5, denoise: true },
   cycles: { device: 'auto', adaptiveSampling: true, samples: 256, bounces: 6, denoise: true, transparent: false },
   cadDieline: null,
@@ -34,9 +34,11 @@ const idleRenderJob: RenderJobState = { stage: 'idle', progress: 0, message: '',
 
 interface StudioState {
   snapshot: ProjectSnapshot; past: ProjectSnapshot[]; future: ProjectSnapshot[]; hydrated: boolean; renderJob: RenderJobState
+  selectedSceneObjectId: string | null
   setSnapshot: (next: ProjectSnapshot, history?: boolean) => void
   patch: <K extends keyof ProjectSnapshot>(key: K, value: Partial<ProjectSnapshot[K]> | ProjectSnapshot[K]) => void
   chooseModel: (type: ProceduralModelType) => void; applyMaterial: (name: string) => void; applyScene: (name: string) => void
+  selectSceneObject: (id: string | null) => void
   setRenderJob: (value: Partial<RenderJobState>) => void; resetRenderJob: () => void
   undo: () => void; redo: () => void; hydrate: () => Promise<void>; save: () => Promise<void>; reset: () => void
 }
@@ -78,7 +80,7 @@ export function migrateSnapshot(saved: unknown): ProjectSnapshot | null {
 }
 
 export const useStudio = create<StudioState>((setState, getState) => ({
-  snapshot: clone(initialSnapshot), past: [], future: [], hydrated: false, renderJob: { ...idleRenderJob },
+  snapshot: clone(initialSnapshot), past: [], future: [], hydrated: false, renderJob: { ...idleRenderJob }, selectedSceneObjectId: 'product-0',
   setSnapshot: (next, history = true) => setState(state => history
     ? { snapshot: clone(next), past: [...state.past.slice(-29), clone(state.snapshot)], future: [] }
     : { snapshot: clone(next) }),
@@ -97,11 +99,12 @@ export const useStudio = create<StudioState>((setState, getState) => ({
   applyMaterial: name => getState().patch('material', { ...materialPresets[name], preset: name } as Partial<MaterialConfig>),
   applyScene: id => {
     const state = getState(); const template = getSceneTemplate(id); const next = clone(state.snapshot)
-    next.scene = { ...next.scene, ...template.scene, templateId: template.id, preset: template.name, productPosition: [0, 0, 0], productRotation: [0, 0, 0], productScale: 1 }
+    next.scene = { ...next.scene, ...template.scene, templateId: template.id, preset: template.name, productPosition: [0, 0, 0], productRotation: [0, 0, 0], productScale: 1, objectOverrides: {} }
     next.lighting = { ...next.lighting, ...template.lighting }
     next.camera = { ...next.camera, ...template.camera }
-    state.setSnapshot(next)
+    state.setSnapshot(next); setState({ selectedSceneObjectId: 'product-0' })
   },
+  selectSceneObject: id => setState({ selectedSceneObjectId: id }),
   setRenderJob: value => setState(state => ({ renderJob: { ...state.renderJob, ...value } })),
   resetRenderJob: () => setState({ renderJob: { ...idleRenderJob } }),
   undo: () => setState(state => state.past.length ? { snapshot: clone(state.past.at(-1)!), past: state.past.slice(0, -1), future: [clone(state.snapshot), ...state.future].slice(0, 30) } : state),
@@ -113,5 +116,5 @@ export const useStudio = create<StudioState>((setState, getState) => ({
     setState({ hydrated: true })
   },
   save: async () => { const state = getState(); await set('anpack-project', clone(state.snapshot)); await cleanupModelAssets(referencedAssetIds([state.snapshot, ...state.past, ...state.future])) },
-  reset: () => { setState({ snapshot: clone(initialSnapshot), past: [], future: [], renderJob: { ...idleRenderJob } }); void cleanupModelAssets([]) },
+  reset: () => { setState({ snapshot: clone(initialSnapshot), past: [], future: [], renderJob: { ...idleRenderJob }, selectedSceneObjectId: 'product-0' }); void cleanupModelAssets([]) },
 }))

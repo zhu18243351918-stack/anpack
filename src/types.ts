@@ -40,10 +40,14 @@ export interface LightingConfig {
   environment: 'studio-small-09' | 'none'; environmentIntensity: number; environmentRotation: number
   keySize: number; fillSize: number
 }
+export interface SceneObjectTransform {
+  position: Vector3Tuple; rotation: Vector3Tuple; scale: number; visible: boolean
+}
 export interface SceneConfig {
   preset: string; background: string; floor: boolean; pedestal: boolean; decor: boolean
   templateId: string; transparent: boolean; productPosition: Vector3Tuple; productRotation: Vector3Tuple
   productScale: number; cyclorama: boolean; floorRoughness: number
+  objectOverrides: Record<string, SceneObjectTransform>
 }
 export interface ExportConfig {
   format: 'png' | 'jpg'; size: 1024 | 2048 | 4096; ratio: '1:1' | '4:3' | '3:4' | '16:9'
