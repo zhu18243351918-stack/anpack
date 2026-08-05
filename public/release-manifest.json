@@ -2,8 +2,8 @@
   "version": "0.1.0",
   "installer": {
     "size": "306.2 MB",
-    "url": "https://github.com/zhu18243351918-stack/anpack/releases/download/v0.1.0/Anpack_0.1.0_x64-setup.exe",
-    "sha256": "4d224d26bca3ad5b16ace1d537e6c0159c091771cb40ee32b5378287787d8021"
+    "sha256": "d74a378dbc618181c9b163542c627c1453dab6e09ce18c460f692cccacc02a13",
+    "url": "https://github.com/zhu18243351918-stack/anpack/releases/download/v0.1.0/Anpack_0.1.0_x64-setup.exe"
   },
-  "publishedAt": "2026-08-05T04:50:16.1821670Z"
+  "publishedAt": "2026-08-05T05:17:07.3681020Z"
 }
