@@ -46,7 +46,7 @@ jobs:
           Remove-Item src-tauri/resources/blender/README.txt -ErrorAction SilentlyContinue
           Copy-Item "blender-unpacked/blender-$env:BLENDER_VERSION-windows-x64/*" src-tauri/resources/blender -Recurse -Force
       - name: Build Tauri NSIS and updater artifacts
-        run: pnpm tauri:build -- --target x86_64-pc-windows-msvc
+        run: pnpm tauri:build --target x86_64-pc-windows-msvc
         env:
           VITE_TARGET: desktop
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
