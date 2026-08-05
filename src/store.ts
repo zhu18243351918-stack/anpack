@@ -5,7 +5,7 @@ import { cleanupModelAssets } from './modelAssets'
 import type { BoxFace, FaceArtwork, MaterialConfig, ProceduralModelType, ProjectSnapshot, RenderJobState } from './types'
 
 const ALL_FACES: BoxFace[] = ['front', 'back', 'left', 'right', 'top', 'bottom', 'topFront', 'topBack', 'topLeft', 'topRight', 'bottomFront', 'bottomBack', 'bottomLeft', 'bottomRight', 'glue']
-const emptyFace = (): FaceArtwork => ({ url: null, name: '', scale: 1, rotation: 0, offsetX: 0, offsetY: 0, repeat: false })
+const emptyFace = (): FaceArtwork => ({ url: null, name: '', scale: 1, rotation: 0, offsetX: 0, offsetY: 0, repeat: false, fit: 'contain' })
 const emptyFaces = (): Record<BoxFace, FaceArtwork> => Object.fromEntries(ALL_FACES.map(face => [face, emptyFace()])) as Record<BoxFace, FaceArtwork>
 
 export const initialSnapshot: ProjectSnapshot = {

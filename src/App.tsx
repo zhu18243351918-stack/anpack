@@ -12,6 +12,7 @@ import CadCreateDialog from './CadCreateDialog'
 import { chooseOutputFile, openProjectFile, saveBlobToDownloads, saveProjectFile, supportsFileLocations, writeOutputFile, type FileHandleLike } from './filePersistence'
 import ModelImportDialog from './ModelImportDialog'
 import DielineEditor, { FACE_LABELS, TEMPLATE_META } from './DielineEditor'
+import { prepareArtworkFile, removeSolidImageBackground } from './artworkTransform'
 import { getSceneTemplate, materialPresets, sceneTemplates } from './presets'
 import { DEFAULT_SCENE_OBJECT_TRANSFORM, getSceneObjectDescriptors, sceneObjectAssetKey, type SceneObjectDescriptor } from './sceneObjects'
 import { useStudio } from './store'
@@ -51,11 +52,11 @@ function ModelParameters() {
 
 function ArtworkPanel({ onError }: { onError: (s: string) => void }) {
   const artwork = useStudio(s => s.snapshot.artwork); const patch = useStudio(s => s.patch); const input = useRef<HTMLInputElement>(null)
-  const upload = (file?: File) => {
+  const upload = async (file?: File) => {
     if (!file) return; if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) return onError('仅支持 PNG、JPG 或 WebP 图像')
     if (file.size > 18 * 1024 * 1024) return onError('图像超过 18MB，请压缩后重试')
-    const reader = new FileReader(); reader.onerror = () => onError('图像读取失败，请换一个文件重试')
-    reader.onload = () => patch('artwork', { url: String(reader.result), name: file.name }); reader.readAsDataURL(file)
+    try { const prepared = await prepareArtworkFile(file); patch('artwork', { url: prepared.url, name: file.name, scale: 1, rotation: 0, offsetX: 0, offsetY: 0 }) }
+    catch (reason) { onError(reason instanceof Error ? reason.message : '图像读取失败，请换一个文件重试') }
   }
   const sample = (kind: 'citrus' | 'mono') => {
     const canvas = document.createElement('canvas'); canvas.width = 900; canvas.height = 1200; const ctx = canvas.getContext('2d')!
@@ -160,24 +161,50 @@ function SceneObjectEditor({ onModelObject, busy }: { onModelObject: (object: Sc
 
 function FaceEditorPanel({ face, surface, onError }: { face: BoxFace; surface: ArtworkSurface; onError: (message: string) => void }) {
   const artwork = useStudio(s => s.snapshot.artwork); const patch = useStudio(s => s.patch); const input = useRef<HTMLInputElement>(null)
+  const [processing, setProcessing] = useState(false); const [backgroundNote, setBackgroundNote] = useState('')
   const surfaceKey = surface === 'outer' ? 'faces' : 'innerFaces'; const surfaceFaces = artwork[surfaceKey]; const current = surfaceFaces[face]
   const updateFace = (value: Partial<typeof current>) => { const nextFace = { ...current, ...value }; patch('artwork', { [surfaceKey]: { ...surfaceFaces, [face]: nextFace }, ...(surface === 'outer' && face === 'front' ? { url: nextFace.url, name: nextFace.name, scale: nextFace.scale, rotation: nextFace.rotation, offsetX: nextFace.offsetX, offsetY: nextFace.offsetY, repeat: nextFace.repeat } : {}) }) }
-  const upload = (file?: File) => {
+  const upload = async (file?: File) => {
     if (!file) return
     if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) return onError('仅支持 PNG、JPG 或 WebP 图像')
     if (file.size > 18 * 1024 * 1024) return onError('图像超过 18MB，请压缩后重试')
-    const reader = new FileReader(); reader.onerror = () => onError('图片读取失败，请重新选择文件')
-    reader.onload = () => updateFace({ url: String(reader.result), name: file.name }); reader.readAsDataURL(file)
+    setProcessing(true)
+    try { const prepared = await prepareArtworkFile(file); updateFace({ url: prepared.url, name: file.name, fit: 'contain', scale: 1, rotation: 0, offsetX: 0, offsetY: 0 }); setBackgroundNote(prepared.removed ? '已自动识别并移除图片中的纯色底' : '') }
+    catch (reason) { onError(reason instanceof Error ? reason.message : '图片读取失败，请重新选择文件') }
+    finally { setProcessing(false) }
   }
+  const removeBackground = async () => {
+    if (!current.url || processing) return; setProcessing(true)
+    try { const result = await removeSolidImageBackground(current.url, true); if (!result.removed) onError(result.reason); else { updateFace({ url: result.url, fit: 'contain' }); setBackgroundNote(result.reason) } }
+    catch (reason) { onError(reason instanceof Error ? reason.message : '智能去底失败') }
+    finally { setProcessing(false) }
+  }
+  useEffect(() => {
+    const source = current.url
+    if (!source?.startsWith('data:image/png')) return
+    let active = true
+    void removeSolidImageBackground(source, false).then(result => {
+      if (!active || !result.removed) return
+      const studio = useStudio.getState(); const latest = studio.snapshot.artwork; const key = surface === 'outer' ? 'faces' : 'innerFaces'; const latestFaces = latest[key]
+      if (latestFaces[face].url !== source) return
+      const nextFace = { ...latestFaces[face], url: result.url, fit: 'contain' as const }
+      studio.patch('artwork', { [key]: { ...latestFaces, [face]: nextFace }, ...(surface === 'outer' && face === 'front' ? { url: result.url, scale: nextFace.scale, rotation: nextFace.rotation, offsetX: nextFace.offsetX, offsetY: nextFace.offsetY, repeat: nextFace.repeat } : {}) })
+      setBackgroundNote('已自动修复没有 Alpha 通道的纯色底 PNG')
+    }).catch(() => undefined)
+    return () => { active = false }
+  }, [current.url, face, surface])
   return <div className="face-editor"><FieldTitle hint={surface === 'outer' ? '外侧独立贴图' : '内侧独立贴图'}>{FACE_LABELS[face]}图案</FieldTitle>
-    <button className={`face-upload ${current.url ? 'has-image' : ''}`} onClick={() => input.current?.click()}>{current.url ? <img src={current.url} alt={`${FACE_LABELS[face]}图案`} /> : <ImagePlus size={25} />}<span>{current.url ? current.name : `上传${FACE_LABELS[face]}图片`}</span><small>支持 PNG / JPG / WebP</small></button>
+    <button className={`face-upload ${current.url ? 'has-image' : ''}`} disabled={processing} onClick={() => input.current?.click()}>{current.url ? <img src={current.url} alt={`${FACE_LABELS[face]}图案`} /> : <ImagePlus size={25} />}<span>{processing ? '正在分析图片' : current.url ? current.name : `上传${FACE_LABELS[face]}图片`}</span><small>支持透明 PNG · 默认完整显示</small></button>
     <input ref={input} hidden type="file" accept="image/png,image/jpeg,image/webp" onChange={e => upload(e.target.files?.[0])} />
+    {backgroundNote && <div className="artwork-fix-note"><Check size={13} />{backgroundNote}</div>}
+    <div className="artwork-fit-mode"><span>适配方式</span><div><button className={(current.fit ?? 'contain') === 'contain' ? 'active' : ''} onClick={() => updateFace({ fit: 'contain' })}>完整显示</button><button className={current.fit === 'cover' ? 'active' : ''} onClick={() => updateFace({ fit: 'cover' })}>铺满裁切</button></div></div>
     <Slider label="图案缩放" value={current.scale} min={.35} max={3} step={.05} onChange={v => updateFace({ scale: v })} />
     <Slider label="旋转" value={current.rotation} min={-180} max={180} unit="°" onChange={v => updateFace({ rotation: v })} />
     <Slider label="水平偏移" value={current.offsetX} min={-.5} max={.5} step={.01} onChange={v => updateFace({ offsetX: v })} />
     <Slider label="垂直偏移" value={current.offsetY} min={-.5} max={.5} step={.01} onChange={v => updateFace({ offsetY: v })} />
     <Switch label="重复平铺" checked={current.repeat} onChange={v => updateFace({ repeat: v })} />
-    <div className="face-actions"><button className="ghost" onClick={() => updateFace({ scale: 1, rotation: 0, offsetX: 0, offsetY: 0, repeat: false })}><RotateCcw size={14} />重置适配</button><button className="ghost danger" disabled={!current.url} onClick={() => updateFace({ url: null, name: '' })}>移除图案</button></div>
+    <button className="ghost wide face-remove-background" disabled={!current.url || processing} onClick={() => void removeBackground()}><Sparkles size={14} />智能移除纯色背景</button>
+    <div className="face-actions"><button className="ghost" onClick={() => updateFace({ fit: 'contain', scale: 1, rotation: 0, offsetX: 0, offsetY: 0, repeat: false })}><RotateCcw size={14} />重置适配</button><button className="ghost danger" disabled={!current.url} onClick={() => { updateFace({ url: null, name: '' }); setBackgroundNote('') }}>移除图案</button></div>
   </div>
 }
 

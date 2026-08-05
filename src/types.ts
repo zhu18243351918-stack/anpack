@@ -20,7 +20,7 @@ export interface CustomModelConfig {
 }
 export type PackagingModelConfig = BoxConfig | BottleConfig | CanConfig | PouchConfig | CustomModelConfig
 
-export interface FaceArtwork { url: string | null; name: string; scale: number; rotation: number; offsetX: number; offsetY: number; repeat: boolean }
+export interface FaceArtwork { url: string | null; name: string; scale: number; rotation: number; offsetX: number; offsetY: number; repeat: boolean; fit?: 'contain' | 'cover' }
 export interface ArtworkTransform {
   url: string | null; name: string; mapping: 'smart' | 'front' | 'wrap' | 'dieline'; faces: Record<BoxFace, FaceArtwork>; innerFaces: Record<BoxFace, FaceArtwork>
   scale: number; rotation: number; offsetX: number; offsetY: number; repeat: boolean; crop: boolean

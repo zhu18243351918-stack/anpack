@@ -20,8 +20,8 @@ declare global {
 
 type SurfaceMaps = { normalMap: THREE.Texture; roughnessMap: THREE.Texture }
 
-function useConfiguredTexture(artwork: Pick<FaceArtwork, 'url' | 'repeat' | 'scale' | 'offsetX' | 'offsetY' | 'rotation'>, aspect = 1) {
-  const textureKey = `${artwork.url ?? ''}|${artwork.repeat}|${artwork.scale}|${artwork.offsetX}|${artwork.offsetY}|${artwork.rotation}|${aspect.toFixed(4)}`
+function useConfiguredTexture(artwork: Pick<FaceArtwork, 'url' | 'repeat' | 'scale' | 'offsetX' | 'offsetY' | 'rotation' | 'fit'>, aspect = 1) {
+  const textureKey = `${artwork.url ?? ''}|${artwork.repeat}|${artwork.scale}|${artwork.offsetX}|${artwork.offsetY}|${artwork.rotation}|${artwork.fit ?? 'contain'}|${aspect.toFixed(4)}`
   const [base, setBase] = useState<{ key: string; texture: THREE.CanvasTexture } | null>(null)
   useEffect(() => {
     if (!artwork.url) return
