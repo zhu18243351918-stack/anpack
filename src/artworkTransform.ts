@@ -104,6 +104,7 @@ export async function removeSolidImageBackground(source: string, force = false) 
 
 export async function prepareArtworkFile(file: File) {
   const source = await readFileAsDataUrl(file)
-  if (file.type !== 'image/png') return { url: source, removed: false, reason: '' }
-  return removeSolidImageBackground(source, false)
+  if (file.type !== 'image/png') return { url: source, originalUrl: null, removed: false, reason: '' }
+  const result = await removeSolidImageBackground(source, false)
+  return { ...result, originalUrl: result.removed ? source : null }
 }

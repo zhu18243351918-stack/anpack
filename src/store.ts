@@ -5,7 +5,7 @@ import { cleanupModelAssets } from './modelAssets'
 import type { BoxFace, FaceArtwork, MaterialConfig, ProceduralModelType, ProjectSnapshot, RenderJobState } from './types'
 
 const ALL_FACES: BoxFace[] = ['front', 'back', 'left', 'right', 'top', 'bottom', 'topFront', 'topBack', 'topLeft', 'topRight', 'bottomFront', 'bottomBack', 'bottomLeft', 'bottomRight', 'glue']
-const emptyFace = (): FaceArtwork => ({ url: null, name: '', scale: 1, rotation: 0, offsetX: 0, offsetY: 0, repeat: false, fit: 'contain' })
+const emptyFace = (): FaceArtwork => ({ url: null, name: '', scale: 1, rotation: 0, offsetX: 0, offsetY: 0, repeat: false, fit: 'contain', originalUrl: null, backgroundMode: 'auto' })
 const emptyFaces = (): Record<BoxFace, FaceArtwork> => Object.fromEntries(ALL_FACES.map(face => [face, emptyFace()])) as Record<BoxFace, FaceArtwork>
 
 export const initialSnapshot: ProjectSnapshot = {
@@ -13,7 +13,7 @@ export const initialSnapshot: ProjectSnapshot = {
   projectName: '未命名包装提案',
   template: 'carton',
   model: modelDefaults.box,
-  artwork: { url: null, name: '', mapping: 'smart', scale: 1, rotation: 0, offsetX: 0, offsetY: 0, repeat: false, crop: true, faces: emptyFaces(), innerFaces: emptyFaces() },
+  artwork: { url: null, name: '', mapping: 'smart', scale: 1, rotation: 0, offsetX: 0, offsetY: 0, repeat: false, crop: true, originalUrl: null, backgroundMode: 'auto', faces: emptyFaces(), innerFaces: emptyFaces() },
   material: {
     preset: '哑光纸', color: '#f2efe7', roughness: .76, metalness: 0, opacity: 1, transmission: 0,
     clearcoat: .04, textureStrength: 1, normalScale: .16, textureScale: 5, ior: 1.46, thickness: .04, clearcoatRoughness: .72,
