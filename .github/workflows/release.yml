@@ -65,13 +65,13 @@ jobs:
           Copy-Item src-tauri/resources/blender_render.py release/Anpack-portable/resources/
           Copy-Item src-tauri/resources/THIRD_PARTY_LICENSES.md release/Anpack-portable/resources/
           Compress-Archive release/Anpack-portable release/Anpack_${{ github.ref_name }}_windows_x64_portable.zip
-          Get-ChildItem src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe | Copy-Item -Destination release
-          $updater = Get-ChildItem src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.nsis.zip | Select-Object -First 1
-          if ($updater) {
-            Copy-Item $updater.FullName release
-            Copy-Item "$($updater.FullName).sig" release
-            $signature = Get-Content "$($updater.FullName).sig" -Raw
-            $latest = @{ version='${{ github.ref_name }}'.TrimStart('v'); notes='Anpack desktop update'; pub_date=(Get-Date).ToUniversalTime().ToString('o'); platforms=@{ 'windows-x86_64'=@{ signature=$signature.Trim(); url="https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/$($updater.Name)" } } } | ConvertTo-Json -Depth 6
+          $installer = Get-ChildItem src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe | Select-Object -First 1
+          Copy-Item $installer.FullName release
+          $signaturePath = "$($installer.FullName).sig"
+          if (Test-Path $signaturePath) {
+            Copy-Item $signaturePath release
+            $signature = Get-Content $signaturePath -Raw
+            $latest = @{ version='${{ github.ref_name }}'.TrimStart('v'); notes='Anpack desktop update'; pub_date=(Get-Date).ToUniversalTime().ToString('o'); platforms=@{ 'windows-x86_64'=@{ signature=$signature.Trim(); url="https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/$($installer.Name)" } } } | ConvertTo-Json -Depth 6
             Set-Content release/latest.json $latest
           }
           Get-ChildItem release -File | ForEach-Object { "$(Get-FileHash $_.FullName -Algorithm SHA256 | Select-Object -ExpandProperty Hash)  $($_.Name)" } | Set-Content release/SHA256SUMS.txt
