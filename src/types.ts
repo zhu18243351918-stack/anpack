@@ -48,6 +48,7 @@ export interface SceneConfig {
   templateId: string; transparent: boolean; productPosition: Vector3Tuple; productRotation: Vector3Tuple
   productScale: number; cyclorama: boolean; floorRoughness: number
   objectOverrides: Record<string, SceneObjectTransform>
+  objectAssets: Record<string, CustomModelConfig>
 }
 export interface ExportConfig {
   format: 'png' | 'jpg'; size: 1024 | 2048 | 4096; ratio: '1:1' | '4:3' | '3:4' | '16:9'

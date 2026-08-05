@@ -15,6 +15,10 @@ export const DEFAULT_SCENE_OBJECT_TRANSFORM: SceneObjectTransform = {
   visible: true,
 }
 
+export function sceneObjectAssetKey(templateId: string, objectId: string) {
+  return `${templateId}:${objectId}`
+}
+
 const templateObjects: Record<string, SceneObjectDescriptor[]> = {
   'commerce-white': [],
   'soft-gradient': [

@@ -7,11 +7,16 @@ import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import { useStudio } from './store'
 import { renderArtworkCanvas } from './artworkTransform'
 import { getSceneTemplate } from './presets'
-import { DEFAULT_SCENE_OBJECT_TRANSFORM } from './sceneObjects'
+import { DEFAULT_SCENE_OBJECT_TRANSFORM, sceneObjectAssetKey } from './sceneObjects'
 import { cloneModelObject, loadModelAssetObject, serializeModel } from './modelAssets'
-import type { BoxFace, CameraConfig, FaceArtwork, MaterialConfig, PackagingModelConfig, PackshotExportRequest, PackshotExportResult } from './types'
+import type { BoxFace, CameraConfig, CustomModelConfig, FaceArtwork, MaterialConfig, PackagingModelConfig, PackshotExportRequest, PackshotExportResult } from './types'
 
-declare global { interface Window { __packshotExport?: (request: PackshotExportRequest) => Promise<PackshotExportResult> } }
+declare global {
+  interface Window {
+    __packshotExport?: (request: PackshotExportRequest) => Promise<PackshotExportResult>
+    __packshotExportSceneObjectGlb?: (id: string) => Promise<ArrayBuffer>
+  }
+}
 
 type SurfaceMaps = { normalMap: THREE.Texture; roughnessMap: THREE.Texture }
 
@@ -263,8 +268,22 @@ function ProductModel({ config }: { config: PackagingModelConfig }) {
   return config.type === 'box' ? <BoxModel config={config} /> : config.type === 'bottle' ? <BottleModel config={config} /> : config.type === 'can' ? <CanModel config={config} /> : config.type === 'pouch' ? <PouchModel config={config} /> : <CustomModel config={config} />
 }
 
+function SceneAssetModel({ config, id }: { config: CustomModelConfig; id: string }) {
+  const [root, setRoot] = useState<THREE.Group | null>(null)
+  useEffect(() => {
+    let active = true
+    loadModelAssetObject(config.assetId).then(source => { if (active) setRoot(cloneModelObject(source)) }).catch(() => { if (active) setRoot(null) })
+    return () => { active = false; setRoot(null) }
+  }, [config.assetId, config.revision])
+  if (!root) return <group><mesh><boxGeometry args={[.35, .35, .35]} /><meshStandardMaterial color="#7d838c" wireframe /></mesh></group>
+  root.name = `scene-model:${id}`
+  return <primitive object={root} />
+}
+
 function EditableSceneObject({ id, position = [0, 0, 0], rotation = [0, 0, 0], scale = 1, children }: { id: string; position?: [number, number, number]; rotation?: [number, number, number]; scale?: number; children: ReactNode }) {
-  const override = useStudio(s => s.snapshot.scene.objectOverrides[id] ?? DEFAULT_SCENE_OBJECT_TRANSFORM)
+  const sceneConfig = useStudio(s => s.snapshot.scene)
+  const override = sceneConfig.objectOverrides[id] ?? DEFAULT_SCENE_OBJECT_TRANSFORM
+  const customAsset = sceneConfig.objectAssets[sceneObjectAssetKey(sceneConfig.templateId, id)]
   const selected = useStudio(s => s.selectedSceneObjectId === id)
   const select = useStudio(s => s.selectSceneObject)
   if (!override.visible) return null
@@ -280,7 +299,7 @@ function EditableSceneObject({ id, position = [0, 0, 0], rotation = [0, 0, 0], s
     onPointerOver={event => { event.stopPropagation(); document.body.style.cursor = 'pointer' }}
     onPointerOut={() => { document.body.style.cursor = '' }}
   >
-    {children}
+    {customAsset ? <SceneAssetModel config={customAsset} id={id} /> : children}
     {selected && <pointLight name="preview-only" color="#ff7a22" intensity={.22} distance={2.6} decay={2} />}
   </group>
 }
@@ -458,6 +477,26 @@ function SceneContent() {
     }
     return () => { delete window.__packshotExportProductGlb }
   }, [scene, snapshot.model, snapshot.artwork, snapshot.material])
+  useEffect(() => {
+    window.__packshotExportSceneObjectGlb = async id => {
+      const source = scene.getObjectByName(`scene-object:${id}`)
+      if (!source) throw new Error('该模板对象当前未显示，请先开启对象显示后重试')
+      const root = new THREE.Group(); root.name = id
+      source.children.filter(child => child.name !== 'preview-only').forEach(child => {
+        const clone = child.clone(true); const remove: THREE.Object3D[] = []
+        clone.traverse(object => {
+          if (object.name === 'preview-only' || object instanceof THREE.Light) { remove.push(object); return }
+          if (!(object instanceof THREE.Mesh)) return
+          object.geometry = object.geometry.clone()
+          object.material = Array.isArray(object.material) ? object.material.map(material => material.clone()) : object.material.clone()
+        })
+        remove.forEach(object => object.removeFromParent()); root.add(clone)
+      })
+      if (!root.children.length) throw new Error('该模板对象没有可编辑网格')
+      return serializeModel(root)
+    }
+    return () => { delete window.__packshotExportSceneObjectGlb }
+  }, [scene, snapshot.scene.templateId, snapshot.scene.objectAssets])
   useEffect(() => {
     scene.background = snapshot.scene.transparent ? null : new THREE.Color(snapshot.scene.background)
     scene.backgroundIntensity = .82

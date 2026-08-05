@@ -114,7 +114,7 @@ export interface NormalizedModelInfo {
   warnings: string[]
 }
 
-export function normalizeImportedModel(input: THREE.Object3D, targetHeightMm = 180): NormalizedModelInfo {
+export function normalizeImportedModel(input: THREE.Object3D, targetHeightMm = 180, preserveTransform = false): NormalizedModelInfo {
   const root = new THREE.Group(); root.name = input.name || '导入模型'; root.add(input)
   const warnings: string[] = []; const remove: THREE.Object3D[] = []
   let meshCount = 0; let triangleCount = 0; let materialIndex = 0
@@ -146,12 +146,14 @@ export function normalizeImportedModel(input: THREE.Object3D, targetHeightMm = 1
   const box = new THREE.Box3().setFromObject(root)
   if (box.isEmpty()) throw new Error('无法计算模型尺寸')
   const initialSize = box.getSize(new THREE.Vector3())
-  const scale = targetHeightMm / 50 / Math.max(initialSize.y, .0001)
-  root.scale.setScalar(scale); root.updateMatrixWorld(true)
-  const scaledBox = new THREE.Box3().setFromObject(root)
-  const center = scaledBox.getCenter(new THREE.Vector3())
-  root.position.x -= center.x; root.position.z -= center.z; root.position.y -= scaledBox.min.y
-  root.updateMatrixWorld(true)
+  if (!preserveTransform) {
+    const scale = targetHeightMm / 50 / Math.max(initialSize.y, .0001)
+    root.scale.setScalar(scale); root.updateMatrixWorld(true)
+    const scaledBox = new THREE.Box3().setFromObject(root)
+    const center = scaledBox.getCenter(new THREE.Vector3())
+    root.position.x -= center.x; root.position.z -= center.z; root.position.y -= scaledBox.min.y
+    root.updateMatrixWorld(true)
+  }
   const finalSize = new THREE.Box3().setFromObject(root).getSize(new THREE.Vector3())
   const boundsMm: Vector3Tuple = [finalSize.x * 50, finalSize.y * 50, finalSize.z * 50]
   if (triangleCount > 500_000) warnings.push(`模型包含 ${triangleCount.toLocaleString()} 个三角面，编辑和路径追踪可能变慢`)
@@ -164,9 +166,9 @@ export function normalizeImportedModel(input: THREE.Object3D, targetHeightMm = 1
 }
 
 export async function createModelAsset(args: {
-  root: THREE.Object3D; name: string; sourceFormat: CustomModelFormat; dependencies?: ModelAssetDependency[]; warnings?: string[]; targetHeightMm?: number
+  root: THREE.Object3D; name: string; sourceFormat: CustomModelFormat; dependencies?: ModelAssetDependency[]; warnings?: string[]; targetHeightMm?: number; preserveTransform?: boolean
 }) {
-  const normalized = normalizeImportedModel(args.root, args.targetHeightMm)
+  const normalized = normalizeImportedModel(args.root, args.targetHeightMm, args.preserveTransform)
   if (normalized.triangleCount > 2_000_000) throw new Error('模型超过 200 万三角面硬限制，请在 Blender 或 C4D 中减面后重新导入')
   const glb = await serializeModel(normalized.root)
   const now = Date.now()

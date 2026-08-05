@@ -24,7 +24,7 @@ export const initialSnapshot: ProjectSnapshot = {
     shadowSoftness: 5, exposure: .88, environment: 'studio-small-09', environmentIntensity: .9,
     environmentRotation: -18, keySize: 4.5, fillSize: 5.5,
   },
-  scene: { preset: '电商白底', templateId: 'commerce-white', background: '#e9e9e7', floor: true, pedestal: false, decor: false, transparent: false, productPosition: [0, 0, 0], productRotation: [0, 0, 0], productScale: 1, cyclorama: true, floorRoughness: .76, objectOverrides: {} },
+  scene: { preset: '电商白底', templateId: 'commerce-white', background: '#e9e9e7', floor: true, pedestal: false, decor: false, transparent: false, productPosition: [0, 0, 0], productRotation: [0, 0, 0], productScale: 1, cyclorama: true, floorRoughness: .76, objectOverrides: {}, objectAssets: {} },
   export: { format: 'png', size: 2048, ratio: '1:1', transparent: false, quality: .92, renderer: 'pathtraced', renderQuality: 'studio', samples: 128, bounces: 5, denoise: true },
   cycles: { device: 'auto', adaptiveSampling: true, samples: 256, bounces: 6, denoise: true, transparent: false },
   cadDieline: null,
@@ -44,7 +44,10 @@ interface StudioState {
 }
 
 const clone = (s: ProjectSnapshot): ProjectSnapshot => structuredClone(s)
-const referencedAssetIds = (snapshots: ProjectSnapshot[]) => [...new Set(snapshots.flatMap(snapshot => snapshot.model.type === 'custom' ? [snapshot.model.assetId] : []))]
+const referencedAssetIds = (snapshots: ProjectSnapshot[]) => [...new Set(snapshots.flatMap(snapshot => [
+  ...(snapshot.model.type === 'custom' ? [snapshot.model.assetId] : []),
+  ...Object.values(snapshot.scene.objectAssets ?? {}).map(asset => asset.assetId),
+]))]
 
 export function migrateSnapshot(saved: unknown): ProjectSnapshot | null {
   if (!saved || typeof saved !== 'object') return null

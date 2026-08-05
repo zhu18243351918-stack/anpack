@@ -26,7 +26,15 @@ function safeName(value: string) { return (value.trim() || 'anpack-project').rep
 async function projectBlob(snapshot: ProjectSnapshot) {
   const files: Record<string, Uint8Array> = { 'project.json': strToU8(JSON.stringify(snapshot)) }
   if (snapshot.model.type === 'custom') { const asset = await getModelAsset(snapshot.model.assetId); if (asset) { files['assets/model.glb'] = new Uint8Array(asset.glb); files['assets/model-meta.json'] = strToU8(JSON.stringify({ id: asset.id, name: asset.name, sourceFormat: asset.sourceFormat, bounds: asset.bounds, materials: asset.materials, warnings: asset.warnings })) } }
-  files['manifest.json'] = strToU8(JSON.stringify({ format: 'anpack-project', version: 4, internalModelFormat: 'glb', createdAt: new Date().toISOString(), projectName: snapshot.projectName, hasCustomModel: snapshot.model.type === 'custom' }))
+  const sceneAssetIndex: { key: string; assetId: string }[] = []
+  for (const [key, config] of Object.entries(snapshot.scene.objectAssets ?? {})) {
+    const asset = await getModelAsset(config.assetId); if (!asset) continue
+    files[`assets/scene/${asset.id}.glb`] = new Uint8Array(asset.glb)
+    files[`assets/scene/${asset.id}.json`] = strToU8(JSON.stringify({ id: asset.id, name: asset.name, sourceFormat: asset.sourceFormat, bounds: asset.bounds, triangleCount: asset.triangleCount, meshCount: asset.meshCount, materialCount: asset.materialCount, dependencies: asset.dependencies, materials: asset.materials, warnings: asset.warnings }))
+    sceneAssetIndex.push({ key, assetId: asset.id })
+  }
+  if (sceneAssetIndex.length) files['assets/scene/index.json'] = strToU8(JSON.stringify(sceneAssetIndex))
+  files['manifest.json'] = strToU8(JSON.stringify({ format: 'anpack-project', version: 4, internalModelFormat: 'glb', createdAt: new Date().toISOString(), projectName: snapshot.projectName, hasCustomModel: snapshot.model.type === 'custom', sceneAssetCount: sceneAssetIndex.length }))
   return new Blob([zipSync(files, { level: 6 })], { type: 'application/zip' })
 }
 
@@ -81,6 +89,16 @@ export async function openProjectFile() {
   if (glb && snapshot.model.type === 'custom') {
     const meta = metaBytes ? JSON.parse(new TextDecoder().decode(metaBytes)) as Partial<ModelAssetRecord> : {}
     const now = Date.now(); await putModelAsset({ schemaVersion: 1, id: snapshot.model.assetId, name: meta.name ?? snapshot.model.name, sourceFormat: meta.sourceFormat ?? snapshot.model.sourceFormat, createdAt: now, updatedAt: now, glb: glb.buffer.slice(glb.byteOffset, glb.byteOffset + glb.byteLength), preview: null, bounds: meta.bounds ?? snapshot.model.bounds, triangleCount: snapshot.model.triangleCount, meshCount: snapshot.model.meshCount, materialCount: snapshot.model.materialCount, dependencies: meta.dependencies ?? [], materials: meta.materials ?? [], warnings: meta.warnings ?? [] })
+  }
+  const sceneIndexBytes = files['assets/scene/index.json']
+  if (sceneIndexBytes) {
+    const index = JSON.parse(new TextDecoder().decode(sceneIndexBytes)) as { key: string; assetId: string }[]
+    for (const item of index) {
+      const config = snapshot.scene.objectAssets[item.key]; const sceneGlb = files[`assets/scene/${item.assetId}.glb`]
+      if (!config || !sceneGlb) continue
+      const metaBytes = files[`assets/scene/${item.assetId}.json`]; const meta = metaBytes ? JSON.parse(new TextDecoder().decode(metaBytes)) as Partial<ModelAssetRecord> : {}
+      const now = Date.now(); await putModelAsset({ schemaVersion: 1, id: item.assetId, name: meta.name ?? config.name, sourceFormat: meta.sourceFormat ?? config.sourceFormat, createdAt: now, updatedAt: now, glb: sceneGlb.buffer.slice(sceneGlb.byteOffset, sceneGlb.byteOffset + sceneGlb.byteLength), preview: null, bounds: meta.bounds ?? config.bounds, triangleCount: meta.triangleCount ?? config.triangleCount, meshCount: meta.meshCount ?? config.meshCount, materialCount: meta.materialCount ?? config.materialCount, dependencies: meta.dependencies ?? [], materials: meta.materials ?? [], warnings: meta.warnings ?? [] })
+    }
   }
   return { snapshot, name }
 }
