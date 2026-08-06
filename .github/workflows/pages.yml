@@ -36,6 +36,19 @@ jobs:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
           VITE_OFFLINE_RECEIPT_PUBLIC_KEY: ${{ secrets.VITE_OFFLINE_RECEIPT_PUBLIC_KEY }}
+      - name: Mirror Windows installer into Pages
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PUBLIC_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
+        run: |
+          VERSION=$(node -p "require('./public/release-manifest.json').version")
+          FILE=$(node -p "new URL(require('./public/release-manifest.json').installer.url).pathname.split('/').pop()")
+          EXPECTED=$(node -p "require('./public/release-manifest.json').installer.sha256")
+          mkdir -p dist/downloads
+          gh release download "v${VERSION}" --pattern "${FILE}" --dir dist/downloads --clobber
+          echo "${EXPECTED}  dist/downloads/${FILE}" | sha256sum --check
+          node -e "const fs=require('fs');const p='dist/release-manifest.json';const m=JSON.parse(fs.readFileSync(p));m.installer.githubUrl=m.installer.url;m.installer.url=process.env.PUBLIC_URL+'downloads/'+new URL(m.installer.githubUrl).pathname.split('/').pop();fs.writeFileSync(p,JSON.stringify(m,null,2))"
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with: { path: dist }
