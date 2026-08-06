@@ -18,7 +18,7 @@
     "createUpdaterArtifacts": true,
     "targets": ["nsis"],
     "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.ico"],
-    "resources": { "resources/blender/**/*": "resources/blender/", "resources/blender_render.py": "resources/blender_render.py", "resources/THIRD_PARTY_LICENSES.md": "resources/THIRD_PARTY_LICENSES.md" },
+    "resources": { "resources/blender": "resources/blender", "resources/blender_render.py": "resources/blender_render.py", "resources/THIRD_PARTY_LICENSES.md": "resources/THIRD_PARTY_LICENSES.md" },
     "windows": { "nsis": { "displayLanguageSelector": true, "installerIcon": "icons/icon.ico", "installMode": "perMachine" } },
     "licenseFile": "../LICENSE"
   },

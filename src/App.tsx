@@ -253,7 +253,7 @@ function ExportDialog({ onClose, onToast }: { onClose: () => void; onToast: (v: 
       onToast(result.fallbackReason ? '路径追踪不可用，已自动使用增强 WebGL 导出' : outputHandle ? `效果图已导出到 ${outputHandle.name}` : '写实效果图已导出到浏览器下载文件夹')
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') { setRenderJob({ stage: 'cancelled', progress: 0, message: '渲染已取消' }); onToast('已取消本次渲染') }
-      else { const message = error instanceof Error ? error.message : '渲染失败'; setRenderJob({ stage: 'error', error: message, message }); onToast('渲染失败，建议降低分辨率或质量后重试') }
+      else { const message = error instanceof Error ? error.message : typeof error === 'string' ? error : '渲染失败'; setRenderJob({ stage: 'error', error: message, message }); onToast(config.renderer === 'cycles' ? 'Cycles 渲染失败，具体原因已显示' : '渲染失败，建议降低分辨率或质量后重试') }
     } finally { setBusy(false); controller.current = null }
   }
   return <div className="modal-backdrop"><div className="export-modal render-export"><header><div><span className="modal-icon"><Download size={19} /></span><div><b>导出写实产品效果图</b><small>{config.renderer === 'cycles' ? 'Blender Cycles 本地最终渲染' : '本地 GPU 路径追踪 · 图案不会上传'}</small></div></div><button className="icon-button" onClick={onClose} disabled={busy} aria-label="关闭"><X size={18} /></button></header><div className="export-body">

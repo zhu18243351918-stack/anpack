@@ -53,6 +53,26 @@ fn blender_paths(app: &AppHandle) -> Result<(PathBuf, PathBuf), String> {
     if !blender.exists() {
         return Err(format!("未找到内置 Blender 运行时：{}", blender.display()));
     }
+    let runtime_complete = blender
+        .parent()
+        .and_then(|directory| std::fs::read_dir(directory).ok())
+        .map(|entries| {
+            entries.flatten().any(|entry| {
+                entry.file_type().map(|kind| kind.is_dir()).unwrap_or(false)
+                    && entry
+                        .file_name()
+                        .to_string_lossy()
+                        .chars()
+                        .next()
+                        .map(|character| character.is_ascii_digit())
+                        .unwrap_or(false)
+                    && entry.path().join("python").join("lib").is_dir()
+            })
+        })
+        .unwrap_or(false);
+    if !runtime_complete {
+        return Err("内置 Blender 运行时目录不完整，请安装 Anpack 0.1.2 或更高版本".into());
+    }
     if !script.exists() {
         return Err(format!("未找到 Cycles 渲染脚本：{}", script.display()));
     }
@@ -79,12 +99,17 @@ async fn start_cycles_render(
         fallback: None,
     };
     let _ = app.emit("cycles-progress", initial);
-    let mut command = Command::new(blender);
+    let mut command = Command::new(&blender);
     command
         .args(["--background", "--factory-startup", "--python"])
         .arg(script)
         .args(["--", "--job"])
         .arg(&job_path)
+        .current_dir(
+            blender
+                .parent()
+                .ok_or_else(|| "无法定位 Blender 运行目录".to_string())?,
+        )
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);
