@@ -1,9 +1,16 @@
 {
-  "version": "0.1.2",
-  "publishedAt": "2026-08-06T03:32:55.5888584Z",
+  "publishedAt": "2026-08-06T07:45:52.1972330Z",
+  "version": "0.2.0",
   "installer": {
-    "sha256": "6a79482257db31123f82f1e88ca6151b53c5b71bc052210e24dbb7b1547e64af",
-    "url": "https://github.com/zhu18243351918-stack/anpack/releases/download/v0.1.2/Anpack_0.1.2_x64-setup.exe",
-    "size": "306.2 MB"
+    "size": "7.6 MB",
+    "url": "https://github.com/zhu18243351918-stack/anpack/releases/download/v0.2.0/Anpack_0.2.0_x64-setup.exe",
+    "sha256": "c8fd9ca4b28116903d538c93993fc1511929849232b7ccf4e2b1712866b5a6bf"
+  },
+  "runtime": {
+    "officialUrl": "https://download.blender.org/release/Blender4.5/blender-4.5.12-windows-x64.zip",
+    "version": "4.5.12",
+    "url": "https://github.com/zhu18243351918-stack/anpack/releases/download/v0.2.0/Anpack_Blender_4.5.12_windows_x64.zip",
+    "size": "380.4 MB",
+    "sha256": "317ef64e7a2c3cc79ec810c766ae9828aff865bea78039dc695b3f1118c34b4f"
   }
 }
