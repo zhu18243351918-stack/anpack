@@ -36,7 +36,7 @@ jobs:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
           VITE_OFFLINE_RECEIPT_PUBLIC_KEY: ${{ secrets.VITE_OFFLINE_RECEIPT_PUBLIC_KEY }}
-      - name: Mirror Windows installer into Pages
+      - name: Mirror Windows downloads into Pages
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -48,7 +48,13 @@ jobs:
           mkdir -p dist/downloads
           gh release download "v${VERSION}" --pattern "${FILE}" --dir dist/downloads --clobber
           echo "${EXPECTED}  dist/downloads/${FILE}" | sha256sum --check
-          node -e "const fs=require('fs');const p='dist/release-manifest.json';const m=JSON.parse(fs.readFileSync(p));m.installer.githubUrl=m.installer.url;m.installer.url=process.env.PUBLIC_URL+'downloads/'+new URL(m.installer.githubUrl).pathname.split('/').pop();fs.writeFileSync(p,JSON.stringify(m,null,2))"
+          RUNTIME_FILE=$(node -p "const m=require('./public/release-manifest.json');m.runtime?.url?new URL(m.runtime.url).pathname.split('/').pop():''")
+          if [ -n "${RUNTIME_FILE}" ]; then
+            RUNTIME_EXPECTED=$(node -p "require('./public/release-manifest.json').runtime.sha256")
+            gh release download "v${VERSION}" --pattern "${RUNTIME_FILE}" --dir dist/downloads --clobber
+            echo "${RUNTIME_EXPECTED}  dist/downloads/${RUNTIME_FILE}" | sha256sum --check
+          fi
+          node -e "const fs=require('fs');const p='dist/release-manifest.json';const m=JSON.parse(fs.readFileSync(p));m.installer.githubUrl=m.installer.url;m.installer.url=process.env.PUBLIC_URL+'downloads/'+new URL(m.installer.githubUrl).pathname.split('/').pop();if(m.runtime){m.runtime.githubUrl=m.runtime.url;m.runtime.url=process.env.PUBLIC_URL+'downloads/'+new URL(m.runtime.githubUrl).pathname.split('/').pop()}fs.writeFileSync(p,JSON.stringify(m,null,2))"
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with: { path: dist }

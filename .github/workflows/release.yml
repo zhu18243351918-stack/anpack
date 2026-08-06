@@ -36,15 +36,12 @@ jobs:
           $config.plugins.updater.endpoints[0] = "https://github.com/${{ github.repository }}/releases/latest/download/latest.json"
           $config.plugins.updater.pubkey = $env:TAURI_UPDATER_PUBLIC_KEY
           $config | ConvertTo-Json -Depth 20 | Set-Content src-tauri/tauri.conf.json
-      - name: Download verified Blender LTS runtime
+      - name: Download verified Blender LTS component archive
         shell: pwsh
         run: |
           $url = "https://download.blender.org/release/Blender4.5/blender-$env:BLENDER_VERSION-windows-x64.zip"
           Invoke-WebRequest $url -OutFile blender.zip
           if ((Get-FileHash blender.zip -Algorithm SHA256).Hash.ToLower() -ne $env:BLENDER_SHA256) { throw 'Blender SHA-256 mismatch' }
-          Expand-Archive blender.zip blender-unpacked
-          Remove-Item src-tauri/resources/blender/README.txt -ErrorAction SilentlyContinue
-          Copy-Item "blender-unpacked/blender-$env:BLENDER_VERSION-windows-x64/*" src-tauri/resources/blender -Recurse -Force
       - name: Build Tauri NSIS and updater artifacts
         run: pnpm tauri:build --target x86_64-pc-windows-msvc
         env:
@@ -65,6 +62,7 @@ jobs:
           Copy-Item src-tauri/resources/blender_render.py release/Anpack-portable/resources/
           Copy-Item src-tauri/resources/THIRD_PARTY_LICENSES.md release/Anpack-portable/resources/
           Compress-Archive release/Anpack-portable release/Anpack_${{ github.ref_name }}_windows_x64_portable.zip
+          Copy-Item blender.zip "release/Anpack_Blender_${env:BLENDER_VERSION}_windows_x64.zip"
           $installer = Get-ChildItem src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe | Select-Object -First 1
           Copy-Item $installer.FullName release
           $signaturePath = "$($installer.FullName).sig"
@@ -85,8 +83,10 @@ jobs:
         shell: pwsh
         run: |
           $installer = Get-ChildItem release/*.exe | Select-Object -First 1
+          $runtime = Get-ChildItem release/Anpack_Blender_*.zip | Select-Object -First 1
           $hash = (Get-FileHash $installer.FullName -Algorithm SHA256).Hash.ToLower()
-          $manifest = @{ version='${{ github.ref_name }}'.TrimStart('v'); publishedAt=(Get-Date).ToUniversalTime().ToString('o'); installer=@{ url="https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/$($installer.Name)"; size="{0:N1} MB" -f ($installer.Length/1MB); sha256=$hash } } | ConvertTo-Json -Depth 4
+          $runtimeHash = (Get-FileHash $runtime.FullName -Algorithm SHA256).Hash.ToLower()
+          $manifest = @{ version='${{ github.ref_name }}'.TrimStart('v'); publishedAt=(Get-Date).ToUniversalTime().ToString('o'); installer=@{ url="https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/$($installer.Name)"; size="{0:N1} MB" -f ($installer.Length/1MB); sha256=$hash }; runtime=@{ version=$env:BLENDER_VERSION; url="https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/$($runtime.Name)"; officialUrl="https://download.blender.org/release/Blender4.5/blender-$env:BLENDER_VERSION-windows-x64.zip"; size="{0:N1} MB" -f ($runtime.Length/1MB); sha256=$runtimeHash } } | ConvertTo-Json -Depth 5
           Set-Content public/release-manifest.json $manifest
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com

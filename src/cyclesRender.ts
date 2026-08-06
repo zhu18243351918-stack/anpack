@@ -9,10 +9,36 @@ import type { CyclesRenderJob, RenderJobState } from './types'
 declare global { interface Window { __packshotExportProductGlb?: () => Promise<ArrayBuffer> } }
 
 interface CyclesProgress { jobId: string; stage: RenderJobState['stage']; progress: number; message: string; device?: string; fallback?: string }
+export interface CyclesRuntimeStatus { installed: boolean; version: string; source?: 'downloaded' | 'bundled' }
+interface CyclesRuntimeProgress { stage: string; progress: number; message: string; downloaded: number; total?: number }
 
 export async function cancelCyclesRender(jobId: string) { await invoke('cancel_cycles_render', { jobId }) }
+export async function getCyclesRuntimeStatus() { return await invoke<CyclesRuntimeStatus>('cycles_runtime_status') }
+
+async function ensureCyclesRuntime(args: { onProgress: (state: Partial<RenderJobState>) => void; signal?: AbortSignal }) {
+  const status = await getCyclesRuntimeStatus()
+  if (status.installed) return status
+  let unlisten: UnlistenFn | null = null
+  const cancel = () => void invoke('cancel_cycles_runtime_install')
+  try {
+    unlisten = await listen<CyclesRuntimeProgress>('cycles-runtime-progress', event => {
+      const detail = event.payload.total ? `${(event.payload.downloaded / 1_048_576).toFixed(1)} / ${(event.payload.total / 1_048_576).toFixed(1)} MB` : ''
+      args.onProgress({ stage: 'preparing', progress: event.payload.progress, message: `${event.payload.message}${detail ? ` · ${detail}` : ''}` })
+    })
+    args.signal?.addEventListener('abort', cancel, { once: true })
+    if (args.signal?.aborted) throw new DOMException('Cycles 组件下载已取消', 'AbortError')
+    return await invoke<CyclesRuntimeStatus>('install_cycles_runtime')
+  } catch (reason) {
+    if (args.signal?.aborted) throw new DOMException('Cycles 组件下载已取消', 'AbortError')
+    throw reason
+  } finally {
+    args.signal?.removeEventListener('abort', cancel)
+    unlisten?.()
+  }
+}
 
 export async function runCyclesRender(args: { width: number; height: number; outputPath?: string; onProgress: (state: Partial<RenderJobState>) => void; signal?: AbortSignal }) {
+  await ensureCyclesRuntime(args)
   if (!window.__packshotExportProductGlb) throw new Error('当前产品模型尚未准备完成')
   const snapshot = useStudio.getState().snapshot; const id = crypto.randomUUID(); const cache = await join(await appCacheDir(), 'render-jobs', id); await mkdir(cache, { recursive: true })
   const glbPath = await join(cache, 'scene.glb'); const jobPath = await join(cache, 'job.json'); const extension = snapshot.export.format === 'png' ? 'png' : 'jpg'

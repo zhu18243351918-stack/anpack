@@ -1,6 +1,6 @@
 # Third-party notices
 
-The Anpack Windows bundle redistributes an unmodified official Blender 4.5 LTS portable runtime.
+Anpack offers an optional, separately downloaded, unmodified official Blender 4.5 LTS portable runtime for Cycles rendering.
 
 - Blender license: GNU General Public License, version 3 or later
 - Project: https://www.blender.org/

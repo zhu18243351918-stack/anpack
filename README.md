@@ -5,7 +5,7 @@ Anpack is a local-first packaging dieline, 3D editing and product rendering work
 ## Targets
 
 - **Web / GitHub Pages**: public product website and authenticated browser editor.
-- **Windows desktop / Tauri 2**: the same React + Three.js editor with an embedded Blender Cycles final-render pipeline.
+- **Windows desktop / Tauri 2**: the same React + Three.js editor with an optional, one-time Blender Cycles component download.
 
 ## Local development
 
@@ -15,7 +15,7 @@ Copy-Item .env.example .env.local
 pnpm dev:web
 ```
 
-Desktop development requires Rust, WebView2 and a Blender runtime at `src-tauri/resources/blender/blender.exe`:
+Desktop development requires Rust and WebView2. The app downloads the verified Blender runtime the first time Cycles is used; developers may also place a complete runtime at `src-tauri/resources/blender/blender.exe`:
 
 ```powershell
 pnpm tauri:dev
